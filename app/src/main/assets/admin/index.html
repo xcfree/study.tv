@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#fff8f0">
+  <title>家长控制台 · 学习电视</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/admin.css">
+  <script src="/admin.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="3" y="4" width="18" height="13" rx="3"/><path d="M8 21h8m-7-11 2 2 4-4"/></svg></span>
+      <div><strong>学习电视</strong><span>家长控制台</span></div>
+    </div>
+    <div class="top-actions">
+      <span class="local"><i></i> <span id="management-mode">局域网</span></span>
+      <button id="logout" class="quiet" type="button" hidden>退出</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="login-panel" class="surface login">
+      <p class="eyebrow">STUDY TV / 家庭管理</p>
+      <h1 id="login-title">登录家长后台</h1>
+      <p id="login-intro" class="intro">使用电视上已设置的 6 位家长 PIN 登录，即可管理观看规则、常用应用和电视背景。</p>
+      <form id="login-form">
+        <label id="login-label" for="login-pin">家长 PIN</label>
+        <input id="login-pin" type="password" inputmode="numeric" autocomplete="off" pattern="[0-9]{6}" maxlength="6" placeholder="输入 6 位数字" required>
+        <button class="primary" type="submit"><span id="login-action">登录</span><span aria-hidden="true">↗</span></button>
+      </form>
+      <p id="login-message" class="message" role="status"></p>
+      <p id="login-hint" class="micro">电视开机联网时，可在同一局域网中登录管理。</p>
+    </section>
+
+    <div id="console" class="console" hidden>
+      <section class="hero">
+        <p class="eyebrow">STUDY TV / 家庭管理</p>
+        <h1>家庭设置</h1>
+        <p class="intro">管理观看节奏、常用应用和电视背景。</p>
+        <button id="refresh" class="quiet" type="button">刷新电视状态</button>
+      </section>
+      <nav class="nav" aria-label="管理分类">
+        <a href="#guard">观看管控</a><a href="#quiz-stats">答题统计</a><a href="#rules">观看规则</a><a href="#apps">常用应用</a><a href="#content">题库与背景</a>
+        <!-- LAN_ONLY_START -->
+        <a href="#cloud-console">CloudBase 控制台</a>
+        <!-- LAN_ONLY_END -->
+      </nav>
+      <div id="notice" class="surface notice" role="status" hidden></div>
+
+      <section id="guard" class="surface section">
+        <div class="heading"><div><p class="eyebrow">01 / 观看概览</p><h2>观看管控</h2></div><span id="connection" class="pill"></span></div>
+        <div class="overview">
+          <div>
+            <dl class="metrics">
+              <div><dt>今日已用</dt><dd id="used">00:00</dd></div>
+              <div><dt>今日剩余</dt><dd id="daily-left">00:00</dd></div>
+              <div><dt>本轮剩余</dt><dd id="available">00:00</dd></div>
+            </dl>
+            <div class="row actions">
+              <button id="guard-toggle" class="primary" type="button"></button>
+            </div>
+            <form id="extra-form" class="row actions">
+              <label id="extra-minutes-label" for="extra-minutes">加时分钟</label>
+              <input id="extra-minutes" type="number" min="1" max="60" step="1" value="15" inputmode="numeric" required>
+              <button id="extra" type="submit">增加时间</button>
+            </form>
+          </div>
+          <div class="subcard history">
+            <h3 id="history-title">每日观看 · 近 12 周</h3>
+            <p id="history-range" class="micro"></p>
+            <p id="history-detail" class="history-detail" aria-live="polite"></p>
+            <div class="history-chart">
+              <div id="history-months" class="history-months" aria-hidden="true"></div>
+              <div class="history-weekdays" aria-hidden="true">
+                <span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span>
+              </div>
+              <div id="history-grid" class="history-grid" role="group" aria-labelledby="history-title"></div>
+            </div>
+            <ul class="history-legend micro" aria-label="图例，单位为分钟">
+              <li>分钟</li>
+              <li><i data-level="-1"></i>无记录</li>
+              <li><i data-level="0"></i>0</li>
+              <li><i data-level="1"></i>&lt;15</li>
+              <li><i data-level="2"></i>15–29</li>
+              <li><i data-level="3"></i>30–59</li>
+              <li><i data-level="4"></i>≥60</li>
+            </ul>
+          </div>
+          <section id="quiz-stats" class="subcard quiz-stats" aria-labelledby="quiz-stats-title">
+            <h3 id="quiz-stats-title">每日答题统计</h3>
+            <div id="quiz-stats-filter" class="row" hidden>
+              <label for="quiz-stats-date">统计日期</label>
+              <select id="quiz-stats-date"></select>
+            </div>
+            <p id="quiz-stats-message" class="micro" role="status"></p>
+            <table id="quiz-stats-table" aria-labelledby="quiz-stats-title" hidden>
+              <thead>
+                <tr><th scope="col">学科</th><th scope="col">总答题数</th><th scope="col">正确题数</th><th scope="col">正确率</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </section>
+        </div>
+      </section>
+
+      <section id="rules" class="surface section">
+        <div class="heading"><div><p class="eyebrow">02 / 时长与题数</p><h2>观看规则</h2></div><span id="question-count" class="pill"></span></div>
+        <form id="rules-form">
+          <div id="rule-fields" class="fields"></div>
+          <label class="check"><input id="wake" type="checkbox"> 待机唤醒后重新答题</label>
+          <button class="primary" type="submit">保存观看规则</button>
+        </form>
+      </section>
+
+      <section id="apps" class="surface section">
+        <div class="heading"><div><p class="eyebrow">03 / 电视桌面</p><h2>常用应用</h2></div><span id="pinned-count" class="pill"></span></div>
+        <p class="intro compact">固定的应用按下方顺序出现在电视桌面。</p>
+        <ul id="favorites" class="app-list"></ul>
+        <button id="save-favorites" class="primary" type="button">保存应用顺序</button>
+      </section>
+
+      <section id="content" class="surface section">
+        <div class="heading"><div><p class="eyebrow">04 / 本地内容</p><h2>题库与背景</h2></div></div>
+        <!-- LAN_ONLY_START -->
+        <p id="upload-status" class="notice" role="status" hidden></p>
+        <!-- LAN_ONLY_END -->
+        <div class="content-grid">
+          <div class="subcard">
+            <h3>答题题库</h3>
+            <p id="question-source" class="micro"></p>
+            <div id="question-controls" hidden>
+              <label for="question-source-select">出题范围</label>
+              <div class="row">
+                <select id="question-source-select"></select>
+                <button id="save-question-source" type="button">应用出题范围</button>
+              </div>
+              <p id="question-subject-summary" class="micro"></p>
+              <ul id="question-subjects" class="app-list"></ul>
+            </div>
+            <!-- LAN_ONLY_START -->
+            <label for="question-subject-name">备用学科（可选）</label>
+            <input id="question-subject-name" type="text" maxlength="20" list="question-subject-names"
+                   placeholder="题目缺少 subject 时使用，留空归入默认学科">
+            <datalist id="question-subject-names"></datalist>
+            <label for="questions-file">选择题库 · JSON / 每科最多 999 道、8 MB</label>
+            <input id="questions-file" type="file" accept=".json,application/json">
+            <div class="row actions">
+              <button id="upload-questions" type="button">导入题库</button>
+            </div>
+            <!-- LAN_ONLY_END -->
+            <button id="reset-questions" class="quiet" type="button" hidden>恢复内置题库</button>
+          </div>
+          <div class="subcard">
+            <h3>电视背景</h3>
+            <label for="wallpaper-select">当前背景</label>
+            <div class="row">
+              <select id="wallpaper-select">
+                <option value="">默认暖暮</option>
+                <option value="IMAGE">已上传的图片</option>
+                <option value="VIDEO">已上传的视频</option>
+              </select>
+              <button id="save-wallpaper" type="button">应用背景</button>
+            </div>
+            <!-- LAN_ONLY_START -->
+            <label for="wallpaper-file">选择图片或视频 · 最大 24 MB / 200 MB</label>
+            <input id="wallpaper-file" type="file" accept="image/*,video/*,.jpg,.jpeg,.png,.webp,.mp4,.m4v,.webm,.mov,.mkv">
+            <div class="row actions">
+              <button id="upload-image" type="button">上传为图片</button>
+              <button id="upload-video" type="button">上传为视频</button>
+            </div>
+            <!-- LAN_ONLY_END -->
+          </div>
+        </div>
+      </section>
+      <!-- LAN_ONLY_START -->
+      <section id="cloud-console" class="surface section">
+        <div class="heading">
+          <h2>CloudBase 控制台</h2><span id="cloud-status" class="pill" role="status"></span>
+        </div>
+        <p class="intro compact">开启后，电视开机联网时会主动连接 CloudBase，供家长从外网管理。</p>
+        <button id="cloud-toggle" type="button" disabled>开启 CloudBase 控制台</button>
+      </section>
+      <!-- LAN_ONLY_END -->
+      <footer id="management-footer">学习电视 · 局域网管理</footer>
+    </div>
+  </main>
+</body>
+</html>

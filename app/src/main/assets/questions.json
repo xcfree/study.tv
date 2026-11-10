@@ -1,0 +1,12 @@
+[
+  {"question":"7 + 8 等于多少？","options":["13","14","15","16"],"answer":2,"explanation":"先把 7 加 3 凑成 10，再加上剩下的 5。"},
+  {"question":"24 ÷ 6 等于多少？","options":["3","4","5","6"],"answer":1,"explanation":"6 × 4 = 24。"},
+  {"question":"一个长方形有几个直角？","options":["2 个","3 个","4 个","6 个"],"answer":2,"explanation":"长方形的四个角都是直角。"},
+  {"question":"1 小时等于多少分钟？","options":["30 分钟","45 分钟","60 分钟","100 分钟"],"answer":2,"explanation":"每小时有 60 分钟。"},
+  {"question":"哪一个数是偶数？","options":["11","15","18","21"],"answer":2,"explanation":"18 能被 2 整除，商是 9。"},
+  {"question":"每盒有 6 支铅笔，4 盒共有几支？","options":["10 支","18 支","20 支","24 支"],"answer":3,"explanation":"4 个 6 相加，等于 24。"},
+  {"question":"100 − 37 等于多少？","options":["53","63","67","73"],"answer":1,"explanation":"100 先减 30 得 70，再减 7 得 63。"},
+  {"question":"下列哪个数最大？","options":["108","180","118","81"],"answer":1,"explanation":"先比百位，再比十位。180 的十位是 8。"},
+  {"question":"一周有几天？","options":["5 天","6 天","7 天","8 天"],"answer":2,"explanation":"从星期一到星期日共有 7 天。"},
+  {"question":"半小时是多少分钟？","options":["15 分钟","20 分钟","30 分钟","45 分钟"],"answer":2,"explanation":"1 小时是 60 分钟，60 的一半是 30。"}
+]

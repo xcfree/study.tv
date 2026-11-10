@@ -1,0 +1,5 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/launcher_background"/>
+    <item android:width="64dp" android:height="64dp" android:gravity="fill"
+        android:drawable="@drawable/launcher_reading_rabbit"/>
+</layer-list>

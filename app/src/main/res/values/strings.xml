@@ -1,0 +1,15 @@
+<resources>
+    <string name="app_name">学习电视</string>
+    <string name="study_tile">我要学习</string>
+    <string name="service_name">学习电视 · 观看管控</string>
+    <string name="service_description">识别前台应用并累计观看时间，锁定时显示答题界面。管控开启时拦截最近任务快捷键，Home 键仍可返回桌面。数据保存在电视本地。</string>
+    <string name="rest_countdown">休息剩余  %1$s</string>
+    <string name="quiz_wrong_answer">答错了，已换题。本轮多加 1 道，还需答对 %1$d 道。</string>
+    <string name="quiz_wrong_answer_rest">答错了，本轮需答对的题数增加了 1 道。休息结束后重新开始。</string>
+    <string name="pin_retry">请在 %1$d 秒后重试</string>
+    <string name="pin_rest">家长 PIN 尝试次数过多，休息结束后可以重新验证。</string>
+    <string name="pin_throttled">尝试次数过多，请在 %1$d 秒后重试</string>
+    <string name="pin_verifying">正在验证 PIN…</string>
+    <string name="pin_unavailable">暂时无法验证 PIN，请重试</string>
+    <string name="phone_pin_countdown">扫码剩余 %1$s</string>
+</resources>

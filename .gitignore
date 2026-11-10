@@ -1,0 +1,31 @@
+# Gradle and Android build output
+.gradle/
+build/
+*.apk
+*.aab
+
+# Local Android SDK and signing files
+local.properties
+*.jks
+*.keystore
+
+# Android Studio
+.idea/
+*.iml
+
+# CloudBase local dependencies and environment
+/cloudbase/node_modules/
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# macOS
+.DS_Store
+
+# Local wallpaper design drafts (the runtime asset lives in app/src/main/res/drawable-nodpi/)
+/study-tv-wallpaper.png
+/study-tv-wallpaper-no-comma.png
+
+# Local assistant notes (not part of the open-source release)
+.workbuddy/

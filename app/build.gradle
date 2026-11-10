@@ -1,0 +1,31 @@
+plugins {
+    id 'com.android.application' version '8.8.2'
+}
+
+def xiaomi6129 = providers.gradleProperty('xiaomi6129').orElse('false').get().toBoolean()
+if (xiaomi6129) {
+    layout.buildDirectory.set(rootProject.layout.buildDirectory.dir('xiaomi-6129/app'))
+}
+
+android {
+    namespace 'tv.study.guard'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId xiaomi6129 ? 'com.ts.launcher' : 'tv.study.guard'
+        manifestPlaceholders.studyTvProcess = xiaomi6129 ? ':home' : 'tv.study.guard'
+        minSdk 23
+        targetSdk 35
+        versionCode 1
+        versionName '0.1.0'
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+}
+
+dependencies {
+    implementation 'io.nayuki:qrcodegen:1.8.0'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+}
