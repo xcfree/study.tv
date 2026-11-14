@@ -26,6 +26,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -65,6 +66,18 @@ final class TvUi {
         view.setTextColor(color);
         if (bold) view.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
         return view;
+    }
+
+    static LinearLayout questionHeader(Context context, String progress, String subject) {
+        LinearLayout row = row(context);
+        row.setGravity(Gravity.TOP);
+        row.setBaselineAligned(false);
+        row.addView(text(context, progress, 15, ACCENT, true),
+                new LinearLayout.LayoutParams(0, WRAP, 1));
+        TextView name = text(context, subject, 16, ACCENT, true);
+        name.setGravity(Gravity.END | Gravity.TOP);
+        row.addView(name, new LinearLayout.LayoutParams(0, WRAP, 1));
+        return row;
     }
 
     private static GradientDrawable surface(Context context, int color, int radius) {
@@ -174,6 +187,14 @@ final class TvUi {
     }
 
     static TextView tab(Context context, String label, Runnable click) {
+        return tab(context, label, click, false);
+    }
+
+    static TextView dateTab(Context context, String label, Runnable click) {
+        return tab(context, label, click, true);
+    }
+
+    private static TextView tab(Context context, String label, Runnable click, boolean coffeeSelected) {
         TextView view = text(context, label, 17, MUTED, true);
         view.setId(View.generateViewId());
         view.setGravity(Gravity.CENTER);
@@ -186,6 +207,9 @@ final class TvUi {
         }, new int[]{ACCENT, WHITE, MUTED}));
 
         StateListDrawable highlight = new StateListDrawable();
+        if (coffeeSelected) {
+            highlight.addState(new int[]{android.R.attr.state_selected}, panel(context, 4));
+        }
         highlight.addState(new int[]{android.R.attr.state_pressed}, surface(context, 0x44ffc38c, 4));
         highlight.addState(new int[]{android.R.attr.state_focused}, surface(context, 0x30ffc38c, 4));
         highlight.addState(new int[]{}, new ColorDrawable(Color.TRANSPARENT));
@@ -199,6 +223,84 @@ final class TvUi {
         view.setBackground(background);
         if (Build.VERSION.SDK_INT >= 26) view.setDefaultFocusHighlightEnabled(false);
         return view;
+    }
+
+    static CheckBox checkbox(Context context, String label, boolean checked) {
+        CheckBox view = new CheckBox(context);
+        view.setId(View.generateViewId());
+        view.setText(label);
+        view.setTextSize(17);
+        view.setTextColor(focusText());
+        view.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        view.setButtonTintList(null);
+        view.setButtonDrawable(new CheckboxMark(context));
+        view.setChecked(checked);
+        view.setMinHeight(dp(context, 54));
+        control(view, 12, 1.015f);
+        StateListDrawable background = new StateListDrawable();
+        background.addState(new int[]{-android.R.attr.state_enabled}, surface(context, 0xff35271f, 12));
+        background.addState(new int[]{android.R.attr.state_pressed}, surface(context, 0xffe9ab77, 12));
+        background.addState(new int[]{android.R.attr.state_focused},
+                surface(context, 0xffffd6a7, 12));
+        background.addState(new int[]{android.R.attr.state_checked},
+                surface(context, 0xff5b3929, 12));
+        background.addState(new int[]{}, surface(context, 0xff433027, 12));
+        view.setBackground(background);
+        view.setPadding(0, dp(context, 10), dp(context, 16), dp(context, 10));
+        return view;
+    }
+
+    private static final class CheckboxMark extends Drawable {
+        private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final Path tick = new Path();
+        private final float scale;
+        private int alpha = 255;
+
+        CheckboxMark(Context context) {
+            scale = context.getResources().getDisplayMetrics().density;
+            paint.setStrokeCap(Paint.Cap.ROUND);
+            paint.setStrokeJoin(Paint.Join.ROUND);
+        }
+
+        @Override public boolean isStateful() { return true; }
+        @Override protected boolean onStateChange(int[] state) { invalidateSelf(); return true; }
+        @Override public int getIntrinsicWidth() { return Math.round(54 * scale); }
+        @Override public int getIntrinsicHeight() { return Math.round(26 * scale); }
+
+        private boolean hasState(int value) {
+            for (int state : getState()) if (state == value) return true;
+            return false;
+        }
+
+        @Override public void draw(Canvas canvas) {
+            boolean checked = hasState(android.R.attr.state_checked);
+            boolean focused = hasState(android.R.attr.state_focused);
+            boolean enabled = hasState(android.R.attr.state_enabled);
+            // CompoundButton positions its button drawable at the edge on older TVs.
+            float x = getBounds().left + 17 * scale;
+            float y = getBounds().top + (getBounds().height() - 24 * scale) / 2;
+            int color = !enabled ? 0xffa68b77 : focused ? INK : checked ? ACCENT : MUTED;
+            paint.setStyle(checked ? Paint.Style.FILL : Paint.Style.STROKE);
+            paint.setStrokeWidth(2 * scale);
+            paint.setColor(color);
+            paint.setAlpha(alpha);
+            canvas.drawRoundRect(x, y, x + 24 * scale, y + 24 * scale, 5 * scale, 5 * scale, paint);
+            if (checked) {
+                paint.setColor(focused ? WHITE : INK);
+                paint.setAlpha(alpha);
+                paint.setStyle(Paint.Style.STROKE);
+                paint.setStrokeWidth(2.5f * scale);
+                tick.reset();
+                tick.moveTo(x + 5 * scale, y + 12 * scale);
+                tick.lineTo(x + 10 * scale, y + 17 * scale);
+                tick.lineTo(x + 19 * scale, y + 7 * scale);
+                canvas.drawPath(tick, paint);
+            }
+        }
+
+        @Override public void setAlpha(int alpha) { this.alpha = alpha; invalidateSelf(); }
+        @Override public void setColorFilter(ColorFilter filter) { paint.setColorFilter(filter); invalidateSelf(); }
+        @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
     }
 
     static void add(LinearLayout column, View child, int marginTop) {

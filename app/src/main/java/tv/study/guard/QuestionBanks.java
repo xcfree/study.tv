@@ -184,6 +184,26 @@ final class QuestionBanks {
         return subjects();
     }
 
+    List<Bank> activeBanks(List<String> sources) {
+        if (sources.contains(MIXED)) return activeBanks(MIXED);
+        List<Bank> active = new ArrayList<>();
+        for (String source : sources) {
+            Bank bank = BUILTIN.equals(source) ? builtin : subject(source);
+            if (bank != null && !active.contains(bank)) active.add(bank);
+        }
+        return active.isEmpty() ? Collections.singletonList(builtin) : active;
+    }
+
+    int count(List<String> sources) {
+        int count = 0;
+        for (Bank bank : activeBanks(sources)) count += bank.size;
+        return count;
+    }
+
+    int capacity(List<String> sources) {
+        return QuestionSchedule.capacity(sources, builtin, subjects());
+    }
+
     int count(String source) {
         Bank bank = subject(source);
         if (bank != null) return bank.size;
@@ -206,7 +226,11 @@ final class QuestionBanks {
         return new File(directory, FILE_PREFIX + encoded + FILE_SUFFIX);
     }
 
-    void install(PreparedImport prepared, String source, int required) throws IOException {
+    interface Validation {
+        void check(List<Bank> banks) throws IOException;
+    }
+
+    void install(PreparedImport prepared, Validation validation) throws IOException {
         Map<String, Bank> next = new TreeMap<>(subjects);
         for (Map.Entry<String, BankWriter> entry : prepared.banks.entrySet()) {
             String name = entry.getKey();
@@ -216,14 +240,7 @@ final class QuestionBanks {
         if (next.size() > MAX_SUBJECTS) {
             throw new IOException("最多导入 " + MAX_SUBJECTS + " 个学科");
         }
-        if (MIXED.equals(source)) {
-            int total = 0;
-            for (Bank bank : next.values()) total += bank.size;
-            requireCapacity(Math.max(total, builtin.size), required);
-        } else if (source.startsWith(SUBJECT_PREFIX)) {
-            BankWriter selected = prepared.banks.get(source.substring(SUBJECT_PREFIX.length()));
-            if (selected != null) requireCapacity(selected.size, required);
-        }
+        validation.check(new ArrayList<>(next.values()));
 
         List<File> staged = new ArrayList<>();
         boolean committed = false;
@@ -242,17 +259,13 @@ final class QuestionBanks {
         }
     }
 
-    String delete(String name, String source, int required) throws IOException {
+    void delete(String name, Validation validation) throws IOException {
         Bank bank = subjects.get(name);
         if (bank == null) throw new IOException("该学科已删除，请刷新页面");
-        String nextSource = subjectSource(name).equals(source) ? MIXED : source;
-        if (MIXED.equals(nextSource)) {
-            requireCapacity(Math.max(importedCount() - bank.size, builtin.size), required);
-        }
         Map<String, Bank> next = new TreeMap<>(subjects);
         next.remove(name);
+        validation.check(new ArrayList<>(next.values()));
         commit(next);
-        return nextSource;
     }
 
     private void commit(Map<String, Bank> next) throws IOException {

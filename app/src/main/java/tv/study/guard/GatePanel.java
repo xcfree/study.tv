@@ -10,6 +10,7 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 final class GatePanel extends FrameLayout {
+    private String displayedSource = "";
     private final Store store;
     private final Runnable onParent, onUnlocked, onStudy;
     private final LinearLayout content;
@@ -24,12 +25,8 @@ final class GatePanel extends FrameLayout {
         this(context, store, onParent, onUnlocked, false, onStudy);
     }
 
-    GatePanel(Context context, Store store, Runnable onParent, Runnable onUnlocked, boolean settingsLocked) {
-        this(context, store, onParent, onUnlocked, settingsLocked, null);
-    }
-
-    private GatePanel(Context context, Store store, Runnable onParent, Runnable onUnlocked,
-                      boolean settingsLocked, Runnable onStudy) {
+    GatePanel(Context context, Store store, Runnable onParent, Runnable onUnlocked,
+              boolean settingsLocked, Runnable onStudy) {
         super(context);
         this.settingsLocked = settingsLocked;
         this.store = store;
@@ -68,8 +65,10 @@ final class GatePanel extends FrameLayout {
         WatchClock.Gate gate = store.clock.gate();
         QuizRound round = store.quiz();
         LocalContent.Question question = gate == WatchClock.Gate.QUIZ && round != null ? round.question : null;
+        String source = gate == WatchClock.Gate.QUIZ && question == null ? store.questionSourceLabel() : "";
         if (gate != displayed || day != store.clock.day || firstDone != store.clock.firstDone
-                || displayedQuestion != question) {
+                || displayedQuestion != question || !source.equals(displayedSource)) {
+            displayedSource = source;
             displayed = gate;
             day = store.clock.day;
             firstDone = store.clock.firstDone;
@@ -84,9 +83,14 @@ final class GatePanel extends FrameLayout {
     }
 
     private void reset(String section, String title, String description) {
+        reset(section, title, description, null);
+    }
+
+    private void reset(String section, String title, String description, String subject) {
         countdown = null;
         content.removeAllViews();
-        TvUi.add(content, TvUi.text(getContext(), section, 15, TvUi.ACCENT, true), 0);
+        TvUi.add(content, subject == null ? TvUi.text(getContext(), section, 15, TvUi.ACCENT, true)
+                : TvUi.questionHeader(getContext(), section, subject), 0);
         TvUi.add(content, TvUi.text(getContext(), title, 34, TvUi.WHITE, true), 8);
         TvUi.add(content, TvUi.text(getContext(), description, 19, TvUi.MUTED, false), 10);
     }
@@ -94,15 +98,17 @@ final class GatePanel extends FrameLayout {
     private void actions(Button primary) {
         LinearLayout row = TvUi.row(getContext());
         if (primary != null) TvUi.gap(row, primary, 0);
-        Button parent = TvUi.button(getContext(), "家长管理", onParent);
-        TvUi.gap(row, parent, primary == null ? 0 : 12);
-        if (onStudy != null && (displayed == WatchClock.Gate.QUIZ || displayed == WatchClock.Gate.DAILY)) {
+        Button study = null;
+        if (!settingsLocked && onStudy != null && (displayed == WatchClock.Gate.QUIZ
+                || displayed == WatchClock.Gate.DAILY || displayed == WatchClock.Gate.REST)) {
             Context context = getContext();
-            Button study = TvUi.button(context, context.getString(R.string.study_tile), onStudy);
-            TvUi.gap(row, study, 12);
+            study = TvUi.button(context, context.getString(R.string.study_tile), onStudy);
+            TvUi.gap(row, study, primary == null ? 0 : 12);
         }
+        Button parent = TvUi.button(getContext(), "家长管理", onParent);
+        TvUi.gap(row, parent, row.getChildCount() == 0 ? 0 : 12);
         TvUi.add(content, row, 20);
-        TvUi.focus(primary == null ? parent : primary);
+        TvUi.focus(primary != null ? primary : study != null ? study : parent);
     }
 
     private void showIntro(boolean wrongAnswer) {
@@ -146,7 +152,9 @@ final class GatePanel extends FrameLayout {
         String description = wrongAnswer
                 ? getContext().getString(R.string.quiz_wrong_answer, round.target - round.correct)
                 : "请选择正确答案";
-        reset("答题解锁  /  已答对 " + round.correct + " / " + round.target + " 题", question.prompt, description);
+        QuestionBanks.Bank bank = round.currentBank();
+        String subject = bank == store.questionBanks.builtin ? QuestionBanks.BUILTIN_SUBJECT : bank.name;
+        reset("答题解锁  /  已答对 " + round.correct + " / " + round.target + " 题", question.prompt, description, subject);
         AnswerChoices choices = new AnswerChoices(getContext(), question.options, selected -> select(question, selected));
         TvUi.add(content, choices, 8);
         TvUi.focus(choices.getChildAt(0));

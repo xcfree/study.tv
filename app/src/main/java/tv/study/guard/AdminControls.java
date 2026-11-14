@@ -70,8 +70,10 @@ final class AdminControls {
             case "/api/questions/reset":
             case "/api/questions/source":
                 try {
-                    store.selectQuestions("/api/questions/reset".equals(path)
-                            ? QuestionBanks.BUILTIN : body.getString("source"));
+                    if ("/api/questions/reset".equals(path)) store.selectQuestions(QuestionBanks.BUILTIN);
+                    else if (body.has("schedule")) store.selectQuestionSchedule(QuestionSchedule.parse(body.getJSONObject("schedule")));
+                    else store.selectQuestions(body.getString("source"));
+                    GuardService.refreshSoon();
                 } catch (IOException e) {
                     throw error(409, e.getMessage());
                 }
@@ -124,9 +126,13 @@ final class AdminControls {
                 .put("quizHistory", quizHistory())
                 .put("dailyLeft", TvUi.duration(store.clock.dailyLeft())).put("rules", rules)
                 .put("relockOnWake", store.clock.rules.relockOnWake)
-                .put("questionCount", store.questionBanks.count(source))
+                .put("questionCount", store.questionCount())
                 .put("customQuestions", !QuestionBanks.BUILTIN.equals(source) && subjects.length() > 0)
                 .put("questionSource", source).put("questionSubjects", subjects)
+                .put("questionSources", new JSONArray(store.questionSources()))
+                .put("questionSchedule", store.questionSchedule().json())
+                .put("questionWeekday", QuestionSchedule.weekday(java.util.Calendar.getInstance()))
+                .put("questionSourceLabel", store.questionSourceLabel())
                 .put("builtinQuestionCount", store.questionBanks.builtin.size)
                 .put("questionUploadLimitMb", QuestionBanks.UPLOAD_LIMIT_MB)
                 .put("wallpaper", store.wallpaperKind())

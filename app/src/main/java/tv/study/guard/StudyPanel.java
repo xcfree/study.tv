@@ -15,6 +15,7 @@ final class StudyPanel extends FrameLayout {
     private final ScrollView scroll;
     private QuestionBanks.Bank bank;
     private QuizRound round;
+    private WrongQuestions.Review review;
     private int answered;
     private boolean showingFeedback;
 
@@ -37,6 +38,7 @@ final class StudyPanel extends FrameLayout {
     private void showSubjects(String description) {
         bank = null;
         round = null;
+        review = null;
         reset(home.getString(R.string.study_tile), "选择科目", description, false);
         Button first = null;
         for (QuestionBanks.Bank entry : banks.practiceBanks()) {
@@ -45,6 +47,10 @@ final class StudyPanel extends FrameLayout {
             TvUi.add(content, subject, 8);
             if (first == null) first = subject;
         }
+        Button mistakes = TvUi.button(home, WrongQuestions.SUBJECT + "  ·  复习错题  ·  "
+                + home.store.wrongQuestions.size() + " 道题", this::beginReview);
+        mistakes.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+        TvUi.add(content, mistakes, 8);
         TvUi.add(content, TvUi.button(home, "返回桌面", this::back), 16);
         TvUi.focus(first);
     }
@@ -54,6 +60,19 @@ final class StudyPanel extends FrameLayout {
         round = new QuizRound(entry);
         answered = 0;
         next();
+    }
+
+    private void beginReview() {
+        review = home.store.wrongQuestions.review();
+        if (review.bank.size > 0) {
+            begin(review.bank);
+            return;
+        }
+        bank = review.bank;
+        reset(WrongQuestions.SUBJECT, "暂时没有错题", "答题解锁和学习练习中答错的题会自动收录在这里。", false);
+        Button subjects = TvUi.primaryButton(home, "选择科目", this::back);
+        TvUi.add(content, subjects, 16);
+        TvUi.focus(subjects);
     }
 
     private void next() {
@@ -83,7 +102,8 @@ final class StudyPanel extends FrameLayout {
         answered++;
         boolean correct = selected == question.answer;
         if (correct) round.correct++;
-        home.store.recordAnswer(bank, correct);
+        if (review == null) home.store.recordAnswer(bank, question, correct);
+        else home.store.recordAnswer(review.subjectAt(round.currentQuestionIndex()), question, correct);
         String feedback = correct ? "回答正确" : "回答错误。正确答案是 " + question.options.get(question.answer);
         LinearLayout panel = reset(progress(answered), question.prompt, feedback, true);
         TvUi.add(panel, TvUi.text(home, "题目解析", 16, TvUi.ACCENT, true), 16);
@@ -97,7 +117,7 @@ final class StudyPanel extends FrameLayout {
     }
 
     private boolean hasCurrentBank() {
-        if (banks.contains(bank)) return true;
+        if (review != null || banks.contains(bank)) return true;
         showSubjects("题库已更新，请重新选择科目。");
         return false;
     }
@@ -107,7 +127,7 @@ final class StudyPanel extends FrameLayout {
     }
 
     private String progress(int number) {
-        return label(bank) + "  /  第 " + number + " / " + bank.size + " 题";
+        return (review == null ? "自主练习" : "错题复习") + "  /  第 " + number + " / " + bank.size + " 题";
     }
 
     private LinearLayout reset(String section, String title, String description, boolean inPanel) {
@@ -118,7 +138,13 @@ final class StudyPanel extends FrameLayout {
             column = TvUi.panelColumn(home);
             TvUi.add(content, column, 0);
         }
-        TvUi.add(column, TvUi.text(home, section, 15, TvUi.ACCENT, true), 0);
+        if (inPanel) {
+            String subject = review != null ? review.subjectAt(round.currentQuestionIndex())
+                    : bank == banks.builtin ? QuestionBanks.BUILTIN_SUBJECT : bank.name;
+            TvUi.add(column, TvUi.questionHeader(home, section, subject), 0);
+        } else {
+            TvUi.add(column, TvUi.text(home, section, 15, TvUi.ACCENT, true), 0);
+        }
         TvUi.add(column, TvUi.text(home, title, 34, TvUi.WHITE, true), 8);
         TvUi.add(column, TvUi.text(home, description, 19, TvUi.MUTED, false), 10);
         return column;

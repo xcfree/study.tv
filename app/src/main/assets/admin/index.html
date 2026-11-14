@@ -132,10 +132,26 @@
             <h3>答题题库</h3>
             <p id="question-source" class="micro"></p>
             <div id="question-controls" hidden>
-              <label for="question-source-select">出题范围</label>
-              <div class="row">
-                <select id="question-source-select"></select>
-                <button id="save-question-source" type="button">应用出题范围</button>
+              <p id="question-upgrade" class="micro" hidden>请先升级电视端，以设置多科目和每周出题安排。</p>
+              <div id="question-schedule-editor">
+                <label for="question-day">出题科目 · 可复选</label>
+                <select id="question-day" aria-label="设置日期">
+                  <option value="0">默认科目</option>
+                  <option value="1">周一</option><option value="2">周二</option>
+                  <option value="3">周三</option><option value="4">周四</option>
+                  <option value="5">周五</option><option value="6">周六</option>
+                  <option value="7">周日</option>
+                </select>
+                <p class="micro">未单独设置的星期沿用默认科目，按电视本地日期切换。每组所选科目的题量合计须覆盖每轮题数。</p>
+                <label id="question-inherit-label" class="check" hidden><input id="question-inherit" type="checkbox">使用默认科目</label>
+                <fieldset id="question-choices" class="question-choices"><legend class="micro">选择出题科目</legend></fieldset>
+                <p id="question-draft-status" class="micro" role="status"></p>
+                <p id="question-error" class="micro error" role="alert" hidden></p>
+                <div class="row actions">
+                  <button id="save-question-source" class="primary" type="button">保存全部设置</button>
+                  <button id="cancel-question-source" type="button">撤销修改</button>
+                </div>
+                <ul id="question-week-summary" class="question-week-summary" aria-label="每周出题安排"></ul>
               </div>
               <p id="question-subject-summary" class="micro"></p>
               <ul id="question-subjects" class="app-list"></ul>

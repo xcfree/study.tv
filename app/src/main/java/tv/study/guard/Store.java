@@ -12,6 +12,7 @@ import android.util.Base64;
 
 import org.json.JSONArray;
 import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.File;
 import java.io.IOException;
@@ -43,6 +44,7 @@ final class Store {
     private static final String HISTORY_START = "watch_history_start";
     private static final String HISTORY_DAY = "watch_history_";
     private static final String QUESTION_SOURCE = "question_source";
+    private static final String QUESTION_SCHEDULE = "question_schedule";
     static final int[] DEFAULTS = {5, 30, 3, 15, 60, 30, 5};
     static final String[] RULE_LABELS = {"首次答题题数", "首次奖励分钟", "续看答题题数",
             "续看奖励分钟", "每日上限分钟", "连续观看上限分钟", "休息分钟"};
@@ -51,6 +53,7 @@ final class Store {
     final WatchClock clock;
     final QuestionBanks questionBanks;
     final QuizHistory quizHistory;
+    final WrongQuestions wrongQuestions;
     private QuizRound quiz;
     private final ContentResolver resolver;
     private final Set<String> settingsPackages = new HashSet<>();
@@ -77,6 +80,7 @@ final class Store {
         }
         prefs = context.getSharedPreferences("study_tv", Context.MODE_PRIVATE);
         quizHistory = new QuizHistory(prefs);
+        wrongQuestions = new WrongQuestions(context);
         int today = ViewingDay.key(Calendar.getInstance());
         if (!prefs.contains(HISTORY_START)) prefs.edit().putInt(HISTORY_START, today).apply();
         clock = new WatchClock(readRules(), prefs.getInt("day", today),
@@ -191,7 +195,7 @@ final class Store {
         refresh();
         if (!enabled() || clock.gate() != WatchClock.Gate.QUIZ || quiz != null) return;
         int target = clock.firstDone ? clock.rules.nextQuestions : clock.rules.firstQuestions;
-        quiz = new QuizRound(questionBanks, questionSource(), target);
+        quiz = new QuizRound(questionBanks, questionSources(), target);
     }
 
     boolean answerQuiz(LocalContent.Question question, int selected) {
@@ -200,7 +204,7 @@ final class Store {
             return false;
         }
         boolean wrongAnswer = selected != question.answer;
-        recordAnswer(quiz.currentBank(), !wrongAnswer);
+        recordAnswer(quiz.currentBank(), question, !wrongAnswer);
         if (!wrongAnswer) {
             if (++quiz.correct >= quiz.target) {
                 clock.passQuiz();
@@ -218,9 +222,14 @@ final class Store {
         return wrongAnswer;
     }
 
-    void recordAnswer(QuestionBanks.Bank bank, boolean correct) {
+    void recordAnswer(QuestionBanks.Bank bank, LocalContent.Question question, boolean correct) {
         String subject = bank == questionBanks.builtin ? QuestionBanks.BUILTIN_SUBJECT : bank.name;
+        recordAnswer(subject, question, correct);
+    }
+
+    void recordAnswer(String subject, LocalContent.Question question, boolean correct) {
         quizHistory.record(Calendar.getInstance(), subject, correct);
+        if (!correct) wrongQuestions.record(subject, question);
     }
 
     List<String> favorites(List<AppCatalog.Entry> apps) {
@@ -254,45 +263,74 @@ final class Store {
     }
 
     String questionSource() {
-        String source = prefs.getString(QUESTION_SOURCE, QuestionBanks.MIXED);
-        return questionBanks.hasSource(source) ? source : QuestionBanks.MIXED;
+        List<String> sources = questionSources();
+        return sources.size() == 1 ? sources.get(0) : QuestionBanks.MIXED;
+    }
+
+    QuestionSchedule questionSchedule() {
+        String stored = prefs.getString(QUESTION_SCHEDULE, null);
+        if (stored != null) {
+            try {
+                return QuestionSchedule.parse(new JSONObject(stored)).withoutMissing(questionBanks);
+            } catch (JSONException ignored) {
+                // Preserve the legacy selection if a stored schedule is unreadable.
+            }
+        }
+        return QuestionSchedule.single(prefs.getString(QUESTION_SOURCE, QuestionBanks.MIXED))
+                .withoutMissing(questionBanks);
+    }
+
+    List<String> questionSources() {
+        return questionSchedule().sources(Calendar.getInstance());
+    }
+
+    int questionCount() {
+        return questionBanks.count(questionSources());
     }
 
     int questionCapacity() {
-        return questionBanks.capacity(questionSource());
+        return questionSchedule().minimumCapacity(questionBanks);
     }
 
     String questionSourceLabel() {
-        List<QuestionBanks.Bank> banks = questionBanks.activeBanks(questionSource());
-        return banks.size() == 1 ? banks.get(0).name : "混合学科";
+        List<QuestionBanks.Bank> banks = questionBanks.activeBanks(questionSources());
+        StringBuilder label = new StringBuilder();
+        for (QuestionBanks.Bank bank : banks) {
+            if (label.length() > 0) label.append("、");
+            label.append(bank == questionBanks.builtin ? QuestionBanks.BUILTIN_SUBJECT + "（内置）" : bank.name);
+        }
+        return label.toString();
     }
 
     void installQuestions(QuestionBanks.PreparedImport prepared) throws IOException {
-        String source = questionSource();
-        questionBanks.install(prepared, source, requiredQuestions());
-        if (QuestionBanks.MIXED.equals(source)) quiz = null;
-        for (String name : prepared.names()) {
-            if (QuestionBanks.subjectSource(name).equals(source)) {
-                quiz = null;
-                break;
-            }
-        }
+        QuestionSchedule schedule = questionSchedule();
+        questionBanks.install(prepared, banks -> schedule.validate(questionBanks.builtin, banks, requiredQuestions()));
+        quiz = null;
     }
 
     void deleteQuestions(String name) throws IOException {
-        String source = questionSource();
-        String next = questionBanks.delete(name, source, requiredQuestions());
-        if (!next.equals(source)) prefs.edit().putString(QUESTION_SOURCE, next).apply();
-        if (QuestionBanks.MIXED.equals(next)) quiz = null;
+        QuestionSchedule next = questionSchedule().without(QuestionBanks.subjectSource(name));
+        questionBanks.delete(name, banks -> next.validate(questionBanks.builtin, banks, requiredQuestions()));
+        saveQuestionSchedule(next);
     }
 
     void selectQuestions(String source) throws IOException {
-        if (!questionBanks.hasSource(source)) throw new IOException("出题范围已失效，请刷新页面");
-        QuestionBanks.requireCapacity(questionBanks.capacity(source), requiredQuestions());
-        if (!source.equals(questionSource())) {
-            prefs.edit().putString(QUESTION_SOURCE, source).apply();
-            quiz = null;
+        selectQuestionSchedule(QuestionSchedule.single(source));
+    }
+
+    void selectQuestionSchedule(QuestionSchedule schedule) throws IOException {
+        try {
+            schedule = QuestionSchedule.parse(schedule.json());
+        } catch (JSONException e) {
+            throw new IOException(e.getMessage(), e);
         }
+        schedule.validate(questionBanks.builtin, questionBanks.subjects(), requiredQuestions());
+        saveQuestionSchedule(schedule);
+    }
+
+    private void saveQuestionSchedule(QuestionSchedule schedule) {
+        prefs.edit().putString(QUESTION_SCHEDULE, schedule.json().toString()).remove(QUESTION_SOURCE).apply();
+        quiz = null;
     }
 
     String wallpaperKind() {

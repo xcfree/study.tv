@@ -15,16 +15,20 @@ import android.view.Window;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.EditText;
 import android.widget.ImageView;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.NumberPicker;
 import android.widget.Spinner;
 import android.widget.TextView;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -45,6 +49,10 @@ final class ParentPanel {
     private boolean changingPin;
     private String favoriteKey;
     private int favoriteButton;
+    private List<List<String>> questionDraft;
+    private QuestionSchedule questionOriginal;
+    private Dialog questionExitDialog;
+    private int questionDay;
 
     ParentPanel(HomeActivity home) {
         this.home = home;
@@ -62,6 +70,9 @@ final class ParentPanel {
                 break;
             case RULES:
                 rules();
+                break;
+            case QUESTION_SUBJECTS:
+                questionSubjects();
                 break;
             case FAVORITES:
                 favorites();
@@ -289,10 +300,11 @@ final class ParentPanel {
     }
 
     private void dashboard() {
-        int totalQuestions = store.questionBanks.count(store.questionSource());
+        int totalQuestions = store.questionCount();
         String service = GuardService.isConnected() ? "服务已连接" : "服务未连接";
         start("学习电视  /  家长管理", "家庭设置",
-                (store.enabled() ? "管控已启用" : "管控未启用") + " · " + service + " · " + totalQuestions + " 道题");
+                (store.enabled() ? "管控已启用" : "管控未启用") + " · " + service
+                        + " · 出题：" + store.questionSourceLabel() + " · " + totalQuestions + " 道题");
         int verticalPadding = TvUi.dp(home, 18);
         content.setPadding(content.getPaddingLeft(), verticalPadding, content.getPaddingRight(), verticalPadding);
 
@@ -318,6 +330,11 @@ final class ParentPanel {
         Button toggle = TvUi.primaryButton(home, store.enabled() ? "关闭管控" : "开启管控", this::toggleGuard);
         menuActions(operations, extraTime,
                 TvUi.button(home, "设置规则", () -> home.show(HomeActivity.Page.RULES)),
+                TvUi.button(home, "出题科目", () -> {
+                    questionDraft = null;
+                    questionDay = 0;
+                    home.show(HomeActivity.Page.QUESTION_SUBJECTS);
+                }),
                 toggle,
                 TvUi.button(home, "更改 PIN", () -> pin(true)));
 
@@ -647,11 +664,187 @@ final class ParentPanel {
         else dashboard();
     }
 
+    private void questionSubjects() {
+        if (questionDraft == null) {
+            QuestionSchedule schedule = store.questionSchedule();
+            questionOriginal = schedule;
+            questionDraft = new ArrayList<>();
+            questionDraft.add(new ArrayList<>(schedule.defaults));
+            for (List<String> day : schedule.week) questionDraft.add(day == null ? null : new ArrayList<>(day));
+        }
+        int[] rules = store.readRuleValues();
+        int required = Math.max(rules[0], rules[2]);
+        start("家长管理  /  学习", "出题科目",
+                "可复选多个科目。未单独设置的星期沿用默认科目；各组题量合计至少需要 " + required + " 道。修改后请选择「保存全部设置」。");
+        LinearLayout tabs = TvUi.row(home);
+        HorizontalScrollView dates = new HorizontalScrollView(home);
+        dates.setHorizontalScrollBarEnabled(false);
+        dates.setClipToPadding(false);
+        dates.addView(tabs, new HorizontalScrollView.LayoutParams(TvUi.WRAP, TvUi.WRAP));
+        TvUi.add(content, dates, 10);
+        View divider = new View(home);
+        divider.setBackgroundColor(0x44dac2b1);
+        content.addView(divider, new LinearLayout.LayoutParams(TvUi.MATCH, TvUi.dp(home, 1)));
+        LinearLayout choices = TvUi.column(home);
+        TvUi.add(content, choices, 8);
+        TextView error = TvUi.text(home, "", 17, TvUi.ACCENT, false);
+        TvUi.add(content, error, 8);
+        Button save = TvUi.primaryButton(home, "保存全部设置", () -> saveQuestionSubjects(error));
+        actions(save, TvUi.button(home, "返回", this::backFromQuestionSubjects));
+        int today = QuestionSchedule.weekday(java.util.Calendar.getInstance()) + 1;
+        for (int i = 0; i < QuestionSchedule.DAYS.length; i++) {
+            int day = i;
+            String label = QuestionSchedule.DAYS[i] + (i == today ? "（今天）" : "");
+            TextView tab = TvUi.dateTab(home, label, () -> selectQuestionDay(tabs, choices, save, day));
+            tab.setOnFocusChangeListener((view, focused) -> {
+                if (focused) selectQuestionDay(tabs, choices, save, day);
+            });
+            TvUi.gap(tabs, tab, 0);
+        }
+        for (int i = 0; i < tabs.getChildCount(); i++) {
+            View tab = tabs.getChildAt(i);
+            tab.setNextFocusLeftId(tabs.getChildAt(Math.max(0, i - 1)).getId());
+            tab.setNextFocusRightId(tabs.getChildAt(Math.min(tabs.getChildCount() - 1, i + 1)).getId());
+        }
+        selectQuestionDay(tabs, choices, save, questionDay);
+        TvUi.focus(tabs.getChildAt(questionDay));
+    }
+
+    private boolean saveQuestionSubjects(TextView error) {
+        try {
+            store.selectQuestionSchedule(new QuestionSchedule(questionDraft.get(0), questionDraft.subList(1, 8)));
+            GuardService.refreshSoon();
+            leaveQuestionSubjects();
+            return true;
+        } catch (IOException e) {
+            error.setText(e.getMessage());
+            return false;
+        }
+    }
+
+    private boolean questionSubjectsChanged() {
+        if (questionDraft == null || questionOriginal == null) return false;
+        if (!sameQuestionSelection(questionDraft.get(0), questionOriginal.defaults)) return true;
+        for (int i = 0; i < 7; i++) {
+            if (!sameQuestionSelection(questionDraft.get(i + 1), questionOriginal.week.get(i))) return true;
+        }
+        return false;
+    }
+
+    private static boolean sameQuestionSelection(List<String> first, List<String> second) {
+        if (first == null || second == null) return first == second;
+        return new HashSet<>(first).equals(new HashSet<>(second));
+    }
+
+    private void leaveQuestionSubjects() {
+        questionDraft = null;
+        questionOriginal = null;
+        home.show(HomeActivity.Page.PARENT);
+    }
+
+    void backFromQuestionSubjects() {
+        if (!questionSubjectsChanged()) {
+            leaveQuestionSubjects();
+            return;
+        }
+        if (questionExitDialog != null) return;
+        Dialog dialog = new Dialog(home);
+        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        LinearLayout panel = TvUi.column(home);
+        inset(panel);
+        int padding = TvUi.dp(home, 24);
+        panel.setPadding(padding, padding, padding, padding);
+        TvUi.add(panel, TvUi.text(home, "保存出题科目设置？", 25, TvUi.WHITE, true), 0);
+        TvUi.add(panel, TvUi.text(home, "有尚未保存的修改，是否保存后返回？", 18, TvUi.MUTED, false), 8);
+        TextView error = TvUi.text(home, "", 17, TvUi.ACCENT, false);
+        TvUi.add(panel, error, 8);
+        Button save = TvUi.primaryButton(home, "保存并返回", () -> saveQuestionSubjects(error));
+        TvUi.add(panel, save, 12);
+        TvUi.add(panel, TvUi.button(home, "不保存", this::leaveQuestionSubjects), 8);
+        TvUi.add(panel, TvUi.button(home, "继续编辑", dialog::cancel), 8);
+        questionExitDialog = dialog;
+        dialog.setOnDismissListener(dismissed -> questionExitDialog = null);
+        dialog.setContentView(panel);
+        dialog.show();
+        Window window = dialog.getWindow();
+        window.setBackgroundDrawableResource(android.R.color.transparent);
+        window.setLayout(Math.min(TvUi.dp(home, 480), home.getResources().getDisplayMetrics().widthPixels - padding * 2), TvUi.WRAP);
+        TvUi.immersive(window.getDecorView());
+        TvUi.focus(save);
+    }
+
+    void dismissQuestionExit() {
+        if (questionExitDialog != null) questionExitDialog.dismiss();
+    }
+
+    private void selectQuestionDay(LinearLayout tabs, LinearLayout choices, Button save, int day) {
+        questionDay = day;
+        for (int i = 0; i < tabs.getChildCount(); i++) tabs.getChildAt(i).setSelected(i == day);
+        questionChoices(choices, save, tabs);
+    }
+
+    private void questionChoices(LinearLayout choices, Button save, LinearLayout tabs) {
+        choices.removeAllViews();
+        boolean inherits = questionDay > 0 && questionDraft.get(questionDay) == null;
+        if (questionDay > 0) {
+            CheckBox inherit = TvUi.checkbox(home, "使用默认科目", inherits);
+            inherit.setOnClickListener(view -> {
+                questionDraft.set(questionDay, inherit.isChecked() ? null : new ArrayList<>(questionDraft.get(0)));
+                questionChoices(choices, save, tabs);
+                TvUi.focus(choices.getChildAt(0));
+            });
+            TvUi.add(choices, inherit, 0);
+            if (inherits) {
+                TvUi.add(choices, TvUi.text(home, "当天随默认科目一起更新。取消勾选后可单独选择科目。", 17, TvUi.MUTED, false), 8);
+            }
+        }
+        List<String> selected = inherits ? questionDraft.get(0) : questionDraft.get(questionDay);
+        questionChoice(choices, selected, QuestionBanks.MIXED, "全部已导入学科（自动包含后续导入）", !inherits);
+        for (QuestionBanks.Bank bank : store.questionBanks.practiceBanks()) {
+            String source = bank == store.questionBanks.builtin ? QuestionBanks.BUILTIN : QuestionBanks.subjectSource(bank.name);
+            String label = bank == store.questionBanks.builtin ? QuestionBanks.BUILTIN_SUBJECT + "（内置题库）" : bank.name;
+            questionChoice(choices, selected, source, label + "  ·  " + bank.size + " 道题", !inherits);
+        }
+        questionChoiceFocus(tabs, choices, save);
+    }
+
+    private void questionChoiceFocus(LinearLayout tabs, LinearLayout choices, Button save) {
+        View first = choices.getChildAt(0);
+        View last = first;
+        for (int i = 1; i < choices.getChildCount(); i++) {
+            if (choices.getChildAt(i).isEnabled() && choices.getChildAt(i).isFocusable()) last = choices.getChildAt(i);
+        }
+        for (int i = 0; i < tabs.getChildCount(); i++) tabs.getChildAt(i).setNextFocusDownId(first.getId());
+        first.setNextFocusUpId(tabs.getChildAt(questionDay).getId());
+        last.setNextFocusDownId(save.getId());
+        save.setNextFocusUpId(last.getId());
+    }
+
+    private void questionChoice(LinearLayout choices, List<String> selected, String source, String label, boolean enabled) {
+        CheckBox button = TvUi.checkbox(home, label, selected.contains(source));
+        button.setEnabled(enabled);
+        button.setOnClickListener(view -> {
+            if (button.isChecked()) {
+                if (QuestionBanks.MIXED.equals(source)) selected.clear();
+                else selected.remove(QuestionBanks.MIXED);
+                selected.add(source);
+            } else selected.remove(source);
+            for (int i = 0; i < choices.getChildCount(); i++) {
+                View child = choices.getChildAt(i);
+                if (child instanceof CheckBox && child.getTag() instanceof String) {
+                    ((CheckBox) child).setChecked(selected.contains(child.getTag()));
+                }
+            }
+        });
+        button.setTag(source);
+        TvUi.add(choices, button, 8);
+    }
+
     private void rules() {
         int[] values = store.readRuleValues();
         int bankSize = store.questionCapacity();
         boolean[] relock = {store.clock.rules.relockOnWake};
-        start("家长管理  /  观看规则", "配置时长和题数", "题数受当前题库限制。休息和每日上限独立于答题奖励。");
+        start("家长管理  /  观看规则", "配置时长和题数", "题数受默认及各星期出题范围的最少题量限制。休息和每日上限独立于答题奖励。");
         Button first = null;
         for (int i = 0; i < values.length; i++) {
             int index = i;

@@ -22,6 +22,9 @@ let expiryTimer;
 let rulesDirty = false;
 let favoritesDirty = false;
 let favoriteDraft = [];
+let questionDraft;
+let questionsDirty = false;
+const questionDays = ['默认科目', '周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
 if (phoneUnlock) {
   byId('login-title').textContent = '验证电视上的操作';
@@ -75,7 +78,8 @@ function leave(message) {
   clearTimeout(expiryTimer);
   storeToken('');
   state = null;
-  rulesDirty = favoritesDirty = false;
+  rulesDirty = favoritesDirty = questionsDirty = false;
+  questionDraft = undefined;
   consolePanel.hidden = true;
   if (!cloud) showUploadMessage('');
   byId('logout').hidden = true;
@@ -388,6 +392,7 @@ function update(path, json, message) {
     const next = await request(path, {json});
     if (path === 'rules') rulesDirty = false;
     if (path === 'favorites') favoritesDirty = false;
+    if (path === 'questions/source' || path === 'questions/reset') questionsDirty = false;
     render(next);
     showMessage(message);
   }, '正在保存…');
@@ -402,14 +407,15 @@ function renderQuestions() {
 
   const current = subjects?.find(({source}) => source === state.questionSource);
   const label = state.customQuestions ? current?.name || (subjects ? '混合学科' : '自定义题库') : '内置题库';
-  byId('question-source').textContent = '当前出题 · ' + label + ' · ' + state.questionCount + ' 道';
+  byId('question-source').textContent = '今日出题 · ' + (state.questionSourceLabel || label) + ' · ' + state.questionCount + ' 道';
   if (!subjects) return;
 
-  const select = byId('question-source-select');
-  select.replaceChildren(new Option('全部已导入学科（混合）', ''),
-    new Option('内置题库 · ' + state.builtinQuestionCount + ' 道', '@builtin'),
-    ...subjects.map(({name, count, source}) => new Option(name + ' · ' + count + ' 道', source)));
-  select.value = state.questionSource;
+  byId('question-upgrade').hidden = !!state.questionSchedule;
+  byId('question-schedule-editor').hidden = !state.questionSchedule;
+  if (state.questionSchedule) {
+    if (!questionsDirty) questionDraft = JSON.parse(JSON.stringify(state.questionSchedule));
+    renderQuestionEditor();
+  }
   byId('question-subject-summary').textContent = '已导入 ' + subjects.length + ' / 9 个学科';
   if (!cloud) {
     byId('question-subject-names').replaceChildren(...subjects.map(({name}) => new Option(name, name)));
@@ -438,6 +444,76 @@ function renderQuestions() {
       if (confirm('删除「' + name + '」题库？')) update('questions/delete', {subject: name}, '学科题库已删除');
     });
     row.append(remove);
+    return row;
+  }));
+}
+
+function questionSelection(day) {
+  return day === 0 ? questionDraft.default : questionDraft.week[day - 1];
+}
+
+function setQuestionSelection(day, sources) {
+  if (day === 0) questionDraft.default = sources;
+  else questionDraft.week[day - 1] = sources;
+  questionsDirty = true;
+}
+
+function questionLabel(source) {
+  if (source === '') return '全部已导入学科';
+  if (source === '@builtin') return '数学（内置题库）';
+  return state.questionSubjects.find((subject) => subject.source === source)?.name || '已删除科目：' + source.slice(8);
+}
+
+function renderQuestionEditor() {
+  const day = Number(byId('question-day').value);
+  const selected = questionSelection(day);
+  const inherits = selected === null;
+  byId('question-inherit-label').hidden = day === 0;
+  byId('question-inherit').checked = inherits;
+  const sources = selected || questionDraft.default;
+  const choices = byId('question-choices');
+  choices.disabled = inherits;
+  const available = [{source: '', name: state.questionSubjects.length
+    ? '全部已导入学科（自动包含后续导入）' : '全部已导入学科（暂无导入，使用内置题库）'},
+    {source: '@builtin', name: '数学（内置题库）', count: state.builtinQuestionCount}, ...state.questionSubjects];
+  for (const source of sources) {
+    if (!available.some((item) => item.source === source)) available.push({source, name: questionLabel(source)});
+  }
+  const focused = choices.contains(document.activeElement) ? document.activeElement.dataset.source : undefined;
+  const legend = document.createElement('legend');
+  legend.className = 'micro';
+  legend.textContent = '选择出题科目';
+  choices.replaceChildren(legend, ...available.map(({source, name, count}) => {
+    const label = document.createElement('label');
+    label.className = 'check';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.dataset.source = source;
+    input.checked = sources.includes(source);
+    input.addEventListener('change', () => {
+      const current = questionSelection(day) || questionDraft.default;
+      if (busy) { input.checked = current.includes(source); return; }
+      let next = current.filter((item) => item !== source);
+      if (input.checked) next = source === '' ? [''] : [...next.filter((item) => item !== ''), source];
+      setQuestionSelection(day, next);
+      for (const checkbox of choices.querySelectorAll('input')) checkbox.checked = next.includes(checkbox.dataset.source);
+      renderQuestionSummary();
+    });
+    label.append(input, document.createTextNode(name + (count === undefined ? '' : ' · ' + count + ' 道')));
+    return label;
+  }));
+  if (focused !== undefined) Array.from(choices.querySelectorAll('input')).find((input) => input.dataset.source === focused)?.focus();
+  renderQuestionSummary();
+}
+
+function renderQuestionSummary() {
+  byId('question-draft-status').textContent = questionsDirty ? '有未保存的修改，切换日期后会保留，最后统一保存。' : '与电视端共用同一份设置。';
+  byId('question-week-summary').replaceChildren(...questionDays.map((name, index) => {
+    const row = document.createElement('li');
+    const selection = questionSelection(index);
+    row.textContent = name + (index === state.questionWeekday + 1 ? '（今天）' : '') + '：'
+      + (selection === null ? '沿用默认 · ' : '')
+      + ((selection || questionDraft.default).map(questionLabel).join('、') || '尚未选择');
     return row;
   }));
 }
@@ -525,7 +601,31 @@ byId('save-favorites').addEventListener('click', () => update('favorites', {favo
 byId('save-wallpaper').addEventListener('click', () => update('wallpaper', {wallpaper: wallpaper.value}, '电视背景已更新'));
 byId('reset-questions').addEventListener('click', () => update('questions/reset', {}, '已恢复内置题库'));
 byId('save-question-source').addEventListener('click', () => {
-  update('questions/source', {source: byId('question-source-select').value}, '出题范围已更新');
+  run(async () => {
+    const selections = [questionDraft.default, ...questionDraft.week];
+    const empty = selections.findIndex((selection) => selection !== null && selection.length === 0);
+    if (empty >= 0) throw new Error(questionDays[empty] + '：请至少选择一个出题科目');
+    const next = await request('questions/source', {json: {schedule: questionDraft}});
+    questionsDirty = false;
+    render(next);
+    showMessage('出题科目及每周安排已保存');
+  }, '正在保存…', (message, error = false) => {
+    byId('question-error').textContent = error ? message : '';
+    byId('question-error').hidden = !error;
+    showMessage(message, error);
+  });
+});
+byId('question-day').addEventListener('change', renderQuestionEditor);
+byId('question-inherit').addEventListener('change', () => {
+  if (busy) { byId('question-inherit').checked = questionSelection(Number(byId('question-day').value)) === null; return; }
+  setQuestionSelection(Number(byId('question-day').value), byId('question-inherit').checked ? null : [...questionDraft.default]);
+  renderQuestionEditor();
+});
+byId('cancel-question-source').addEventListener('click', () => {
+  if (busy || !state.questionSchedule) return;
+  questionsDirty = false;
+  byId('question-error').hidden = true;
+  renderQuestions();
 });
 if (!cloud) {
   byId('cloud-toggle').addEventListener('click', () => {

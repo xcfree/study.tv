@@ -23,11 +23,15 @@ final class QuizRound {
     int target;
 
     QuizRound(QuestionBanks banks, String source, int initialTarget) {
-        List<QuestionBanks.Bank> active = banks.activeBanks(source);
+        this(banks, Collections.singletonList(source), initialTarget);
+    }
+
+    QuizRound(QuestionBanks banks, List<String> sources, int initialTarget) {
+        List<QuestionBanks.Bank> active = banks.activeBanks(sources);
         for (QuestionBanks.Bank bank : active) pools.add(new Pool(bank));
         fallback = active.contains(banks.builtin) ? Collections.emptyList()
                 : Collections.singletonList(new Pool(banks.builtin));
-        target = Math.min(banks.capacity(source), initialTarget);
+        target = Math.min(banks.capacity(sources), initialTarget);
         advance();
     }
 
@@ -50,6 +54,10 @@ final class QuizRound {
 
     QuestionBanks.Bank currentBank() {
         return currentPool.bank;
+    }
+
+    int currentQuestionIndex() {
+        return currentIndex;
     }
 
     void advance() {

@@ -30,10 +30,11 @@ import java.util.List;
 
 public final class HomeActivity extends Activity {
     static final String ACTION_PARENT = "tv.study.guard.action.PARENT";
+    static final String ACTION_STUDY = "tv.study.guard.action.STUDY";
     private static final long SETTINGS_RETURN_DELAY_MS = 750;
     private static final long SETTINGS_LAUNCH_TIMEOUT_MS = 2000;
     private static final long FOCUS_RESUME_DELAY_MS = 250;
-    enum Page { HOME, APPS, STUDY, PIN, PHONE_PIN, PARENT, RULES, FAVORITES, WEB, CLOUD }
+    enum Page { HOME, APPS, STUDY, PIN, PHONE_PIN, PARENT, RULES, QUESTION_SUBJECTS, FAVORITES, WEB, CLOUD }
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable ticker = this::tick;
     private final Runnable endSettingsOnReturn = this::endSettingsIfFocused;
@@ -89,6 +90,7 @@ public final class HomeActivity extends Activity {
 
     @Override
     protected void onDestroy() {
+        parent.dismissQuestionExit();
         handler.removeCallbacks(resumeAfterFocus);
         store.prefs.unregisterOnSharedPreferenceChangeListener(desktopChanges);
         unregisterReceiver(parentIdleEvents);
@@ -106,12 +108,14 @@ public final class HomeActivity extends Activity {
 
     private void acceptIntent(Intent intent) {
         parent.dismissExtraTime();
+        parent.dismissQuestionExit();
         closePhoneChallenge();
         study = null;
         phonePinError = null;
         authenticated = false;
         requestSystemSettings = false;
-        page = ACTION_PARENT.equals(intent.getAction()) ? initialPinPage() : Page.HOME;
+        page = ACTION_PARENT.equals(intent.getAction()) ? initialPinPage()
+                : ACTION_STUDY.equals(intent.getAction()) ? Page.STUDY : Page.HOME;
     }
 
     @Override
@@ -132,6 +136,7 @@ public final class HomeActivity extends Activity {
         active = false;
         handler.removeCallbacks(endSettingsOnReturn);
         parent.dismissExtraTime();
+        parent.dismissQuestionExit();
         // Some TV screensavers cover the launcher with an Activity instead of a system dream.
         if (authenticated && !store.hasParentSettingsAccess()) lockParentAccess();
         closePhoneChallenge();
@@ -181,7 +186,10 @@ public final class HomeActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (page == Page.RULES || page == Page.FAVORITES || page == Page.WEB || page == Page.CLOUD) {
+        if (page == Page.QUESTION_SUBJECTS) {
+            parent.backFromQuestionSubjects();
+        } else if (page == Page.RULES || page == Page.FAVORITES
+                || page == Page.WEB || page == Page.CLOUD) {
             show(Page.PARENT);
         } else if (page == Page.STUDY) {
             study.back();
@@ -195,6 +203,7 @@ public final class HomeActivity extends Activity {
     }
 
     void show(Page next) {
+        if (next != Page.QUESTION_SUBJECTS) parent.dismissQuestionExit();
         if (next != Page.PARENT) parent.dismissExtraTime();
         if (next != Page.STUDY) study = null;
         if (next != Page.PHONE_PIN) closePhoneChallenge();
@@ -276,8 +285,7 @@ public final class HomeActivity extends Activity {
 
     private boolean mustReturnHome() {
         WatchClock.Gate current = store.clock.gate();
-        return (page != Page.HOME && current == WatchClock.Gate.PIN_REST)
-                || (page == Page.STUDY && store.enabled() && current == WatchClock.Gate.REST);
+        return page != Page.HOME && current == WatchClock.Gate.PIN_REST;
     }
 
     private void tick() {

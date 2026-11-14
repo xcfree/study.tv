@@ -280,7 +280,8 @@ public final class GuardService extends AccessibilityService {
     }
 
     private void showOverlay(boolean settingsLocked, boolean pauseVideo) {
-        GatePanel panel = new GatePanel(this, store, this::openParent, this::removeOverlay, settingsLocked);
+        GatePanel panel = new GatePanel(this, store, this::openParent, this::removeOverlay,
+                settingsLocked, this::openStudy);
         Wallpaper wallpaper = new Wallpaper(this, store, true);
         wallpaper.setVideoPaused(pauseVideo);
         panel.addView(wallpaper, 0, new FrameLayout.LayoutParams(TvUi.MATCH, TvUi.MATCH));
@@ -303,6 +304,13 @@ public final class GuardService extends AccessibilityService {
         } catch (WindowManager.BadTokenException | SecurityException e) {
             Log.w("StudyTV", "Unable to show quiz overlay", e);
         }
+    }
+
+    private void openStudy() {
+        Intent intent = new Intent(this, HomeActivity.class).setAction(HomeActivity.ACTION_STUDY)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        startActivity(intent);
+        requestInspection();
     }
 
     private void openParent() {
