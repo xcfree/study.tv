@@ -111,7 +111,9 @@ final class Store {
         int previousDay = clock.day;
         long dayEnd = today > previousDay ? now + ViewingDay.endOf(previousDay, date) - wall : now;
         long archived = clock.update(now, wall, today, dayEnd, viewing && enabled(), pinRetryDeadline());
-        if (quiz != null && (clock.day != previousDay || clock.gate() != WatchClock.Gate.QUIZ)) quiz = null;
+        WatchClock.Gate gate = clock.gate();
+        if (quiz != null && (clock.day != previousDay || (gate != WatchClock.Gate.QUIZ
+                && !(gate == WatchClock.Gate.REST && quiz.result == QuizRound.Result.REST)))) quiz = null;
         saveClock(previousDay, archived);
     }
 
@@ -198,28 +200,42 @@ final class Store {
         quiz = new QuizRound(questionBanks, questionSources(), target);
     }
 
-    boolean answerQuiz(LocalContent.Question question, int selected) {
+    void answerQuiz(LocalContent.Question question, int selected) {
         refresh();
-        if (quiz == null || quiz.question != question || selected < 0 || selected >= question.options.size()) {
-            return false;
+        if (quiz == null || quiz.question != question || quiz.result != null
+                || selected < 0 || selected >= question.options.size()) return;
+
+        boolean correct = selected == question.answer;
+        recordAnswer(quiz.currentBank(), question, correct);
+        if (correct) {
+            quiz.result = ++quiz.correct >= quiz.target ? QuizRound.Result.PASSED : QuizRound.Result.CORRECT;
+        } else if (quiz.recordWrongAnswer()) {
+            quiz.result = QuizRound.Result.REST;
+            clock.restAfterQuiz(SystemClock.elapsedRealtime(), System.currentTimeMillis());
+            saveClock();
+        } else {
+            quiz.result = QuizRound.Result.WRONG;
         }
-        boolean wrongAnswer = selected != question.answer;
-        recordAnswer(quiz.currentBank(), question, !wrongAnswer);
-        if (!wrongAnswer) {
-            if (++quiz.correct >= quiz.target) {
+    }
+
+    void continueQuiz(LocalContent.Question question) {
+        refresh();
+        if (quiz == null || quiz.question != question || quiz.result == null) return;
+
+        switch (quiz.result) {
+            case PASSED:
                 clock.passQuiz();
                 quiz = null;
                 saveClock();
-                return false;
-            }
-        } else if (quiz.recordWrongAnswer()) {
-            clock.restAfterQuiz(SystemClock.elapsedRealtime(), System.currentTimeMillis());
-            quiz = null;
-            saveClock();
-            return true;
+                break;
+            case REST:
+                quiz = null;
+                break;
+            default:
+                quiz.advance();
+                quiz.result = null;
+                break;
         }
-        quiz.advance();
-        return wrongAnswer;
     }
 
     void recordAnswer(QuestionBanks.Bank bank, LocalContent.Question question, boolean correct) {

@@ -13,12 +13,15 @@ import java.util.Set;
 final class QuizRound {
     private static final int REST_TARGET = 10;
 
+    enum Result { CORRECT, WRONG, PASSED, REST }
+
     private final List<Pool> pools = new ArrayList<>();
     private final List<Pool> fallback;
     private final Random random = new Random();
     private Pool currentPool;
     private int currentIndex;
     LocalContent.Question question;
+    Result result;
     int correct;
     int target;
 

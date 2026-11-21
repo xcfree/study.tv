@@ -106,9 +106,7 @@ final class StudyPanel extends FrameLayout {
         else home.store.recordAnswer(review.subjectAt(round.currentQuestionIndex()), question, correct);
         String feedback = correct ? "回答正确" : "回答错误。正确答案是 " + question.options.get(question.answer);
         LinearLayout panel = reset(progress(answered), question.prompt, feedback, true);
-        TvUi.add(panel, TvUi.text(home, "题目解析", 16, TvUi.ACCENT, true), 16);
-        String explanation = question.explanation.isEmpty() ? "这道题暂无解析。" : question.explanation;
-        TvUi.add(panel, TvUi.text(home, explanation, 19, TvUi.WHITE, false), 6);
+        TvUi.addQuestionExplanation(panel, question.explanation);
         Button next = TvUi.primaryButton(home, answered == bank.size ? "查看结果" : "下一题", () -> {
             if (showingFeedback && round != null && round.question == question) next();
         });

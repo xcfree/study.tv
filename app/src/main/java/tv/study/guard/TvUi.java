@@ -80,6 +80,13 @@ final class TvUi {
         return row;
     }
 
+    static void addQuestionExplanation(LinearLayout panel, String explanation) {
+        Context context = panel.getContext();
+        add(panel, text(context, "题目解析", 16, ACCENT, true), 16);
+        String body = explanation.isEmpty() ? "这道题暂无解析。" : explanation;
+        add(panel, text(context, body, 19, WHITE, false), 6);
+    }
+
     private static GradientDrawable surface(Context context, int color, int radius) {
         GradientDrawable drawable = new GradientDrawable();
         drawable.setColor(color);

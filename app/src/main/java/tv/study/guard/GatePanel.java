@@ -7,6 +7,7 @@ import android.view.KeyEvent;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 final class GatePanel extends FrameLayout {
@@ -14,9 +15,11 @@ final class GatePanel extends FrameLayout {
     private final Store store;
     private final Runnable onParent, onUnlocked, onStudy;
     private final LinearLayout content;
+    private final ScrollView scroll;
     private TextView countdown;
     private WatchClock.Gate displayed;
     private LocalContent.Question displayedQuestion;
+    private QuizRound.Result displayedResult;
     private int day;
     private boolean firstDone;
     private final boolean settingsLocked;
@@ -42,7 +45,8 @@ final class GatePanel extends FrameLayout {
         TvUi.add(holder, content, 0);
         int width = Math.min(TvUi.dp(context, 784), context.getResources().getDisplayMetrics().widthPixels);
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(width, TvUi.MATCH, Gravity.CENTER);
-        addView(TvUi.scroll(context, holder), params);
+        scroll = TvUi.scroll(context, holder);
+        addView(scroll, params);
         if (settingsLocked) {
             reset("学习电视  /  系统设置", "请输入家长 PIN", "系统设置由家长管理。");
             actions(null);
@@ -57,24 +61,24 @@ final class GatePanel extends FrameLayout {
     }
 
     void refresh() {
-        refresh(false);
-    }
-
-    private void refresh(boolean wrongAnswer) {
         if (settingsLocked) return;
         WatchClock.Gate gate = store.clock.gate();
         QuizRound round = store.quiz();
-        LocalContent.Question question = gate == WatchClock.Gate.QUIZ && round != null ? round.question : null;
+        boolean showQuiz = round != null && (gate == WatchClock.Gate.QUIZ
+                || (gate == WatchClock.Gate.REST && round.result == QuizRound.Result.REST));
+        LocalContent.Question question = showQuiz ? round.question : null;
+        QuizRound.Result result = showQuiz ? round.result : null;
         String source = gate == WatchClock.Gate.QUIZ && question == null ? store.questionSourceLabel() : "";
         if (gate != displayed || day != store.clock.day || firstDone != store.clock.firstDone
-                || displayedQuestion != question || !source.equals(displayedSource)) {
+                || displayedQuestion != question || displayedResult != result || !source.equals(displayedSource)) {
             displayedSource = source;
             displayed = gate;
             day = store.clock.day;
             firstDone = store.clock.firstDone;
             displayedQuestion = question;
-            if (question == null) showIntro(wrongAnswer);
-            else showQuestion(round, question, wrongAnswer);
+            displayedResult = result;
+            if (question == null) showIntro();
+            else showQuestion(round, question);
         }
         if (countdown != null) {
             countdown.setText(getContext().getString(R.string.rest_countdown,
@@ -89,6 +93,7 @@ final class GatePanel extends FrameLayout {
     private void reset(String section, String title, String description, String subject) {
         countdown = null;
         content.removeAllViews();
+        scroll.scrollTo(0, 0);
         TvUi.add(content, subject == null ? TvUi.text(getContext(), section, 15, TvUi.ACCENT, true)
                 : TvUi.questionHeader(getContext(), section, subject), 0);
         TvUi.add(content, TvUi.text(getContext(), title, 34, TvUi.WHITE, true), 8);
@@ -111,7 +116,7 @@ final class GatePanel extends FrameLayout {
         TvUi.focus(primary != null ? primary : study != null ? study : parent);
     }
 
-    private void showIntro(boolean wrongAnswer) {
+    private void showIntro() {
         switch (displayed) {
             case QUIZ:
                 int questions = store.clock.firstDone ? store.clock.rules.nextQuestions : store.clock.rules.firstQuestions;
@@ -126,11 +131,9 @@ final class GatePanel extends FrameLayout {
             case PIN_REST:
                 boolean pinRest = displayed == WatchClock.Gate.PIN_REST;
                 String description = pinRest ? getContext().getString(R.string.pin_rest)
-                        : wrongAnswer ? getContext().getString(R.string.quiz_wrong_answer_rest)
                         : "休息结束后可以回来继续。";
                 reset("学习电视  /  休息时间", "让眼睛休息一下", description);
-                countdown = TvUi.text(getContext(), "", 22, TvUi.ACCENT, true);
-                TvUi.add(content, countdown, 12);
+                addCountdown();
                 if (!pinRest) actions(null);
                 break;
             case DAILY:
@@ -148,20 +151,62 @@ final class GatePanel extends FrameLayout {
         refresh();
     }
 
-    private void showQuestion(QuizRound round, LocalContent.Question question, boolean wrongAnswer) {
-        String description = wrongAnswer
-                ? getContext().getString(R.string.quiz_wrong_answer, round.target - round.correct)
-                : "请选择正确答案";
+    private void addCountdown() {
+        countdown = TvUi.text(getContext(), "", 22, TvUi.ACCENT, true);
+        TvUi.add(content, countdown, 12);
+    }
+
+    private void showQuestion(QuizRound round, LocalContent.Question question) {
+        Context context = getContext();
+        QuizRound.Result result = round.result;
+        String description = "请选择正确答案";
+        if (result != null) {
+            description = result == QuizRound.Result.CORRECT || result == QuizRound.Result.PASSED
+                    ? "回答正确" : "回答错误。正确答案是 " + question.options.get(question.answer);
+        }
         QuestionBanks.Bank bank = round.currentBank();
         String subject = bank == store.questionBanks.builtin ? QuestionBanks.BUILTIN_SUBJECT : bank.name;
         reset("答题解锁  /  已答对 " + round.correct + " / " + round.target + " 题", question.prompt, description, subject);
-        AnswerChoices choices = new AnswerChoices(getContext(), question.options, selected -> select(question, selected));
-        TvUi.add(content, choices, 8);
-        TvUi.focus(choices.getChildAt(0));
+        if (result == null) {
+            AnswerChoices choices = new AnswerChoices(context, question.options, selected -> {
+                store.answerQuiz(question, selected);
+                refresh();
+            });
+            TvUi.add(content, choices, 8);
+            TvUi.focus(choices.getChildAt(0));
+        } else {
+            showFeedback(round, question, result);
+        }
     }
 
-    private void select(LocalContent.Question question, int selected) {
-        boolean wrongAnswer = store.answerQuiz(question, selected);
-        refresh(wrongAnswer);
+    private void showFeedback(QuizRound round, LocalContent.Question question, QuizRound.Result result) {
+        Context context = getContext();
+        TvUi.addQuestionExplanation(content, question.explanation);
+        String action = "下一题";
+        switch (result) {
+            case WRONG:
+                String progress = context.getString(R.string.quiz_wrong_answer, round.target - round.correct);
+                TvUi.add(content, TvUi.text(context, progress, 16, TvUi.MUTED, false), 12);
+                break;
+            case REST:
+                action = "继续";
+                if (displayed == WatchClock.Gate.REST) {
+                    String message = context.getString(R.string.quiz_wrong_answer_rest);
+                    TvUi.add(content, TvUi.text(context, message, 16, TvUi.MUTED, false), 12);
+                    addCountdown();
+                }
+                break;
+            case PASSED:
+                action = "解锁观看";
+                break;
+            default:
+                break;
+        }
+        Button next = TvUi.primaryButton(context, action, () -> {
+            store.continueQuiz(question);
+            refresh();
+        });
+        TvUi.add(content, next, 16);
+        TvUi.focus(next);
     }
 }
