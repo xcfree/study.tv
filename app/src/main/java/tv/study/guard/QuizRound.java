@@ -11,8 +11,6 @@ import java.util.Random;
 import java.util.Set;
 
 final class QuizRound {
-    private static final int REST_TARGET = 10;
-
     enum Result { CORRECT, WRONG, PASSED, REST }
 
     private final List<Pool> pools = new ArrayList<>();
@@ -35,7 +33,7 @@ final class QuizRound {
         fallback = active.contains(banks.builtin) ? Collections.emptyList()
                 : Collections.singletonList(new Pool(banks.builtin));
         target = Math.min(banks.capacity(sources), initialTarget);
-        advance();
+        if (!advance()) throw new IllegalStateException("No eligible quiz questions");
     }
 
     QuizRound(QuestionBanks.Bank bank) {
@@ -50,9 +48,9 @@ final class QuizRound {
         return question != null;
     }
 
-    boolean recordWrongAnswer() {
+    boolean recordWrongAnswer(int restTarget) {
         currentPool.missed.add(currentIndex);
-        return ++target >= REST_TARGET;
+        return ++target >= restTarget;
     }
 
     QuestionBanks.Bank currentBank() {
@@ -63,7 +61,7 @@ final class QuizRound {
         return currentIndex;
     }
 
-    void advance() {
+    boolean advance() {
         LocalContent.Question next = draw(pools);
         if (next == null) next = draw(fallback);
         if (next == null) {
@@ -72,8 +70,9 @@ final class QuizRound {
             next = draw(pools);
             if (next == null) next = draw(fallback);
         }
-        if (next == null) throw new IllegalStateException("No eligible quiz questions");
+        if (next == null) return false;
         question = next.shuffle();
+        return true;
     }
 
     private LocalContent.Question draw(List<Pool> candidates) {

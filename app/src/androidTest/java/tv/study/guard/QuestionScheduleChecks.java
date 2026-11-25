@@ -28,6 +28,7 @@ final class QuestionScheduleChecks {
         };
         try {
             QuestionBanks banks = new QuestionBanks(isolated);
+            verifyQuizRestTarget(banks);
             install(isolated, banks, "语文", 3, null, 0);
             install(isolated, banks, "英语", 4, null, 0);
             String chinese = QuestionBanks.subjectSource("语文");
@@ -83,6 +84,29 @@ final class QuestionScheduleChecks {
             File[] files = directory.listFiles();
             if (files != null) for (File file : files) file.delete();
             directory.delete();
+        }
+    }
+
+    private static void verifyQuizRestTarget(QuestionBanks banks) {
+        for (int restTarget : new int[]{7, Store.DEFAULTS[Store.QUIZ_REST_TARGET_RULE], 12}) {
+            QuizRound round = new QuizRound(banks, QuestionBanks.BUILTIN, 5);
+            for (int target = 6; target <= restTarget; target++) {
+                check(round.recordWrongAnswer(restTarget) == (target == restTarget),
+                        "Rest starts on the wrong answer that reaches the configured target");
+                check(round.target == target, "Each wrong answer adds exactly one required correct answer");
+                if (target < restTarget) check(round.advance(), "Draw another question before reaching the target");
+            }
+        }
+        QuizRound round = new QuizRound(banks, QuestionBanks.BUILTIN, 5);
+        check(round.recordWrongAnswer(5), "A wrong answer triggers rest when the starting target meets the limit");
+
+        round = new QuizRound(banks, QuestionBanks.BUILTIN, 5);
+        Set<String> seen = new HashSet<>();
+        for (int i = 0; i < banks.builtin.size; i++) {
+            check(seen.add(round.question.prompt), "Missed questions are excluded");
+            check(!round.recordWrongAnswer(Store.RULE_LIMITS[Store.QUIZ_REST_TARGET_RULE]),
+                    "Exhausting the built-in bank can happen before reaching a higher target");
+            check(round.advance() == (i + 1 < banks.builtin.size), "Report when there are no eligible questions left");
         }
     }
 

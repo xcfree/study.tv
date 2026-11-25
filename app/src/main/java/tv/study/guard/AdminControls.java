@@ -161,10 +161,12 @@ final class AdminControls {
 
     private void saveRules(JSONObject body) throws JSONException, LanHttpServer.Failure {
         JSONArray values = body.getJSONArray("values");
-        int[] rules = new int[Store.DEFAULTS.length];
+        int[] rules = store.readRuleValues();
         int bankSize = store.questionCapacity();
-        if (values.length() != rules.length) throw error(400, "观看规则不完整");
-        for (int i = 0; i < rules.length; i++) {
+        if (values.length() != rules.length && values.length() != Store.QUIZ_REST_TARGET_RULE) {
+            throw error(400, "观看规则不完整");
+        }
+        for (int i = 0; i < values.length(); i++) {
             int limit = ruleLimit(i, bankSize);
             Object value = values.get(i);
             if (!(value instanceof Integer) || (int) value < 1 || (int) value > limit) {

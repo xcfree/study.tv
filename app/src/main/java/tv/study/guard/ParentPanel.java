@@ -844,7 +844,8 @@ final class ParentPanel {
         int[] values = store.readRuleValues();
         int bankSize = store.questionCapacity();
         boolean[] relock = {store.clock.rules.relockOnWake};
-        start("家长管理  /  观看规则", "配置时长和题数", "题数受默认及各星期出题范围的最少题量限制。休息和每日上限独立于答题奖励。");
+        start("家长管理  /  观看规则", "配置时长和题数",
+                "首次和续看题数受各出题范围的最少题量限制。答错加 1 题，达到本轮总题数上限即休息 10 分钟。");
         Button first = null;
         for (int i = 0; i < values.length; i++) {
             int index = i;

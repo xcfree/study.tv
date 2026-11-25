@@ -13,11 +13,11 @@ final class WatchClock {
 
     static final class Rules {
         final int firstQuestions, firstMinutes, nextQuestions, nextMinutes;
-        final int dailyMinutes, continuousMinutes, restMinutes;
+        final int dailyMinutes, continuousMinutes, restMinutes, quizRestTarget;
         final boolean relockOnWake;
 
         Rules(int firstQuestions, int firstMinutes, int nextQuestions, int nextMinutes,
-              int dailyMinutes, int continuousMinutes, int restMinutes, boolean relockOnWake) {
+              int dailyMinutes, int continuousMinutes, int restMinutes, int quizRestTarget, boolean relockOnWake) {
             this.firstQuestions = firstQuestions;
             this.firstMinutes = firstMinutes;
             this.nextQuestions = nextQuestions;
@@ -25,6 +25,7 @@ final class WatchClock {
             this.dailyMinutes = dailyMinutes;
             this.continuousMinutes = continuousMinutes;
             this.restMinutes = restMinutes;
+            this.quizRestTarget = quizRestTarget;
             this.relockOnWake = relockOnWake;
         }
     }

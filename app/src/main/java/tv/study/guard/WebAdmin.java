@@ -141,8 +141,8 @@ final class WebAdmin implements AutoCloseable {
             servePage(request, output);
             return;
         }
-        String origin = request.headers.get("origin");
-        if (!"1".equals(request.headers.get("x-studytv")) || (origin != null && !this.origin.equals(origin))) {
+        // A cross-origin browser request needs CORS preflight to send this header.
+        if (!"1".equals(request.headers.get("x-studytv"))) {
             throw error(403, "请求来源无效");
         }
         try {

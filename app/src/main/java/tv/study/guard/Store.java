@@ -45,10 +45,11 @@ final class Store {
     private static final String HISTORY_DAY = "watch_history_";
     private static final String QUESTION_SOURCE = "question_source";
     private static final String QUESTION_SCHEDULE = "question_schedule";
-    static final int[] DEFAULTS = {5, 30, 3, 15, 60, 30, 5};
+    static final int QUIZ_REST_TARGET_RULE = 7;
+    static final int[] DEFAULTS = {5, 30, 3, 15, 60, 30, 5, 10};
     static final String[] RULE_LABELS = {"首次答题题数", "首次奖励分钟", "续看答题题数",
-            "续看奖励分钟", "每日上限分钟", "连续观看上限分钟", "休息分钟"};
-    static final int[] RULE_LIMITS = {20, 180, 20, 180, 720, 180, 60};
+            "续看奖励分钟", "每日上限分钟", "连续观看上限分钟", "休息分钟", "答错后本轮总题数上限"};
+    static final int[] RULE_LIMITS = {20, 180, 20, 180, 720, 180, 60, 20};
     final SharedPreferences prefs;
     final WatchClock clock;
     final QuestionBanks questionBanks;
@@ -175,7 +176,7 @@ final class Store {
 
     private WatchClock.Rules readRules() {
         int[] v = readRuleValues();
-        return new WatchClock.Rules(v[0], v[1], v[2], v[3], v[4], v[5], v[6],
+        return new WatchClock.Rules(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[QUIZ_REST_TARGET_RULE],
                 prefs.getBoolean("relock_wake", true));
     }
 
@@ -209,10 +210,9 @@ final class Store {
         recordAnswer(quiz.currentBank(), question, correct);
         if (correct) {
             quiz.result = ++quiz.correct >= quiz.target ? QuizRound.Result.PASSED : QuizRound.Result.CORRECT;
-        } else if (quiz.recordWrongAnswer()) {
+        } else if (quiz.recordWrongAnswer(clock.rules.quizRestTarget)) {
             quiz.result = QuizRound.Result.REST;
-            clock.restAfterQuiz(SystemClock.elapsedRealtime(), System.currentTimeMillis());
-            saveClock();
+            restAfterQuiz();
         } else {
             quiz.result = QuizRound.Result.WRONG;
         }
@@ -232,10 +232,19 @@ final class Store {
                 quiz = null;
                 break;
             default:
-                quiz.advance();
-                quiz.result = null;
+                if (quiz.advance()) {
+                    quiz.result = null;
+                } else {
+                    quiz = null;
+                    restAfterQuiz();
+                }
                 break;
         }
+    }
+
+    private void restAfterQuiz() {
+        clock.restAfterQuiz(SystemClock.elapsedRealtime(), System.currentTimeMillis());
+        saveClock();
     }
 
     void recordAnswer(QuestionBanks.Bank bank, LocalContent.Question question, boolean correct) {
